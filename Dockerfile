@@ -10,23 +10,23 @@ RUN apt-get update && apt-get install -y \
     make \
     && rm -rf /var/lib/apt/lists/*
 
-# Create app directory
+# Create symlink so "python" command works
+RUN ln -sf /usr/bin/python3 /usr/bin/python
+
+# Set JAVA_HOME
+ENV JAVA_HOME=/usr/lib/jvm/java-21-openjdk-amd64
+ENV PATH="$JAVA_HOME/bin:$PATH"
+
 WORKDIR /app
 
-# Copy package files
 COPY package*.json ./
 
-# Install Node dependencies
 RUN npm install
 
-# Copy source
 COPY . .
 
-# Create temp directory
 RUN mkdir -p temp
 
-# Expose API port
 EXPOSE 5000
 
-# Start application
 CMD ["npm", "start"]

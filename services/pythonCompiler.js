@@ -1,51 +1,34 @@
-const fs = require("fs/promises");
+const fs = require("fs");
 const path = require("path");
-const { execFile } = require("child_process");
-const { promisify } = require("util");
-const { v4: uuid } = require("uuid");
+const { spawn } = require("child_process");
 
-const execFileAsync = promisify(execFile);
+module.exports = (code, input = "") => {
+    return new Promise((resolve) => {
 
-async function runPython(code, input = "") {
-    const jobId = uuid();
+        const dir = path.join(__dirname, "../temp");
+        if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
 
-    const dir = path.join(__dirname, "..", "temp", jobId);
+        const filePath = path.join(dir, "main.py");
+        fs.writeFileSync(filePath, code);
 
-    await fs.mkdir(dir, { recursive: true });
+        const child = spawn("python", [filePath]);
 
-    const codeFile = path.join(dir, "main.py");
-    const inputFile = path.join(dir, "input.txt");
+        let stdout = "";
+        let stderr = "";
 
-    await fs.writeFile(codeFile, code);
-    await fs.writeFile(inputFile, input);
+        child.stdout.on("data", data => stdout += data.toString());
+        child.stderr.on("data", data => stderr += data.toString());
 
-    try {
-        const { stdout, stderr } = await execFileAsync(
-            "python",
-            [codeFile],
-            {
-                input,
-                timeout: 5000,
-                maxBuffer: 1024 * 1024
-            }
-        );
+        if (input) child.stdin.write(input);
+        child.stdin.end();
 
-        return {
-            success: true,
-            stdout,
-            stderr,
-            exitCode: 0
-        };
-    } catch (err) {
-        return {
-            success: false,
-            stdout: err.stdout || "",
-            stderr: err.stderr || err.message,
-            exitCode: err.code || 1
-        };
-    } finally {
-        await fs.rm(dir, { recursive: true, force: true });
-    }
-}
-
-module.exports = runPython;
+        child.on("close", code => {
+            resolve({
+                success: code === 0,
+                stdout,
+                stderr,
+                exitCode: code
+            });
+        });
+    });
+};
