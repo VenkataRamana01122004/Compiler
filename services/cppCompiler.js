@@ -6,7 +6,9 @@ module.exports = (code, input = "") => {
     return new Promise((resolve) => {
 
         const dir = path.join(__dirname, "../temp");
-        if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
+        if (!fs.existsSync(dir)) {
+            fs.mkdirSync(dir, { recursive: true });
+        }
 
         const source = path.join(dir, "program.cpp");
         const exe = path.join(dir, "program.exe");
@@ -16,8 +18,11 @@ module.exports = (code, input = "") => {
         exec(`g++ "${source}" -o "${exe}"`, (err, stdout, stderr) => {
 
             if (err) {
+                cleanup();
+
                 return resolve({
                     success: false,
+                    output: stderr || stdout,
                     stdout,
                     stderr,
                     exitCode: err.code
@@ -29,22 +34,64 @@ module.exports = (code, input = "") => {
             let output = "";
             let error = "";
 
-            child.stdout.on("data", data => output += data.toString());
-            child.stderr.on("data", data => error += data.toString());
+            child.stdout.on("data", (data) => {
+                output += data.toString();
+            });
 
-            if (input) child.stdin.write(input);
+            child.stderr.on("data", (data) => {
+                error += data.toString();
+            });
+
+            if (input) {
+                child.stdin.write(input);
+            }
+
             child.stdin.end();
 
-            child.on("close", code => {
+            const TIME_LIMIT = 5000; // 5 seconds
+            let timedOut = false;
+
+            const timer = setTimeout(() => {
+                timedOut = true;
+                child.kill("SIGKILL");
+            }, TIME_LIMIT);
+
+            child.on("close", (code) => {
+
+                clearTimeout(timer);
+
+                cleanup();
+
+                if (timedOut) {
+                    return resolve({
+                        success: false,
+                        output: "Time Limit Exceeded",
+                        stdout: "",
+                        stderr: "Time Limit Exceeded",
+                        exitCode: -1
+                    });
+                }
+
                 resolve({
                     success: code === 0,
+                    output: error || output,
                     stdout: output,
                     stderr: error,
                     exitCode: code
                 });
+
             });
 
         });
+
+        function cleanup() {
+            try {
+                if (fs.existsSync(source)) fs.unlinkSync(source);
+                if (fs.existsSync(exe)) fs.unlinkSync(exe);
+            } catch (err) {
+                console.error(err);
+            }
+        }
 
     });
 };

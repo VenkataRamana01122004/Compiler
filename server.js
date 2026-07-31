@@ -26,7 +26,7 @@ app.get("/health", (req, res) => {
     });
 });
 
-const PORT = process.env.PORT || 5000;
+const PORT = process.env.PORT || 2004;
 
 app.listen(PORT, () => {
     console.log(`Ramana Server running on port ${PORT}`);
